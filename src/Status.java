@@ -4,6 +4,13 @@ public class Status {
 	private long latency;
 	private boolean expired;
 	
+	
+	
+	public Status(long staleness, long latency, boolean expired) {
+		this.staleness = staleness;
+		this.latency = latency;
+		this.expired = expired;
+	}
 	public long getStaleness() {
 		return staleness;
 	}

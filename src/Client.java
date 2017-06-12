@@ -20,9 +20,18 @@ public class Client {
 		CoordinatorRunnable coordinator = new CoordinatorRunnable(queue,sessionEndTime);
 		threads.add(new Thread(coordinator));
 		
-//		create a checker thread
-		StausWriterRunnable checker = new StausWriterRunnable();
-		threads.add(new Thread(checker));
+//		create a number of worker thread to read updates
+		for(int i=0; i<numThread; i++){
+			threads.add(new Thread(new WorkerRunnable(i, queue)));
+		}
+		
+		//create a thread which issue request
+		RequestRunnable requestRunnable = new RequestRunnable();
+		threads.add(new Thread(requestRunnable));
+		
+		//create a thread which write the status of each thread
+		StatusWriterRunnable statusWriterRunnable = new StatusWriterRunnable();
+		threads.add(new Thread(statusWriterRunnable));
 		
 		for(int i=0; i<threads.size(); i++){
 			threads.get(i).start();

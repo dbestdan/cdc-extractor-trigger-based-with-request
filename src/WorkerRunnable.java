@@ -1,3 +1,4 @@
+
 /**
  * 1. Get the range of records which needs to be extracted from database
  * 2. Extract the records from given range
@@ -62,40 +63,43 @@ public class WorkerRunnable implements Runnable, Config {
 		ResultSet rs = null;
 		ResultSet commitTimeResultSet = null;
 		try {
-			String query = "select *, pg_xact_commit_timestamp(transaction_id::text::xid) from audit.logged_actions " + "where event_id > ? and event_id <= ? "
-					+ "and table_name in (" + tables.get(System.getProperty("tables")) + ")";
+			String query = "select *, pg_xact_commit_timestamp(transaction_id::text::xid) from audit.logged_actions "
+					+ "where event_id > ? and event_id <= ? " + "and table_name in ("
+					+ tables.get(System.getProperty("tables")) + ")";
 			stmt = conn.prepareStatement(query);
 		} catch (SQLException e1) {
 			e1.printStackTrace();
 		}
 
 		try {
+			while (true) {
+				Task task = queue.take();
 
-			Task task = queue.take();
+				stmt.setLong(1, task.getMinSeqID());
+				stmt.setLong(2, task.getMaxSeqID());
+				rs = stmt.executeQuery();
 
-			stmt.setLong(1, task.getMinSeqID());
-			stmt.setLong(2, task.getMaxSeqID());
-			rs = stmt.executeQuery();
+				while (rs.next()) {
 
-			while (rs.next()) {
+					// write to a file
+					writeLocalFile(rs);
 
-				// write to a file
-				writeLocalFile(rs);
+					// get transaction id
+					Long taID = rs.getLong(9);
 
-				// get transaction id
-				Long taID = rs.getLong(9);
+					// get transaction commit timestamp from transaction id
+					Timestamp t = rs.getTimestamp(18);
 
-				// get transaction commit timestamp from transaction id				
-				Timestamp t = rs.getTimestamp(18);
-
-				// if commit timestamp is latest then update uptodate time
-				synchronized (CoordinatorRunnable.uptodate) {
-					if (CoordinatorRunnable.uptodate == null || CoordinatorRunnable.uptodate.before(t)) {
-						CoordinatorRunnable.uptodate = t;
+					// if commit timestamp is latest then update uptodate time
+					synchronized (CoordinatorRunnable.uptodate) {
+						if (CoordinatorRunnable.uptodate == null || CoordinatorRunnable.uptodate.before(t)) {
+							CoordinatorRunnable.uptodate = t;
+						}
 					}
 				}
-			}
+				System.out.println("Worker uptodatetime : " + CoordinatorRunnable.uptodate.getTime());
 
+			}
 
 		} catch (InterruptedException | SQLException e) {
 			e.printStackTrace();

@@ -20,15 +20,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 
 /**
- * Task of Coordinator 
- * 1. Get Maximum Sequence Id 
- * 2. Check number of worker thread available 
- * 3. Divide tasks to available worker threads 
- * 4. Execute Workers 
- * 5. Execute Checker ( Checker will continuously check whether the
- * 	  request has expired or not 
- * 6. Wait for workers to finish its task 
- * 7. Record Latency
+ * Task of Coordinator
  * 
  * @author hadoop
  *
@@ -41,21 +33,7 @@ public class CoordinatorRunnable implements Runnable, Config {
 	private BlockingQueue<Task> queue = null;
 	private long sessionEndTime = 0L;
 	public static long sessionStartTime = 0L;
-	private Writer out;
-	private Writer latencyWriter;
-	private String tableNames = null;
-	private long timeWindow = 0L;
-	private long totalLatency = 0L;
-	private long avgLatency = 0L;
-	private int threadSize = 0;
-	public static Long totalRequest = 0L;
-	public static Integer completedThread = 0;
 	public static Timestamp uptodate = null;
-	public static Long requestStartTime = 0L;
-	public Timestamp requestStartTimeStamp = null;
-	public static Long requestExpirationTime = 0L;
-	public static Integer requestInProgress = 0;
-	ArrayList<Thread> threads = new ArrayList<Thread>();
 
 	public CoordinatorRunnable(BlockingQueue<Task> queue, long sessionEndTime) {
 		this.queue = queue;
@@ -63,27 +41,21 @@ public class CoordinatorRunnable implements Runnable, Config {
 		try {
 			conn = Client.getConnection();
 			String query = "select max(event_id) from audit.logged_actions where " + "table_name in("
-					+ tables.get(System.getProperty("tables")) + ") and "
-							+ "pg_xact_commit_timestamp(transaction_id::text::xid) < ?";
+					+ tables.get(System.getProperty("tables")) + ")";
 			stmt = conn.prepareStatement(query);
-
-
+			rs = stmt.executeQuery();
+			rs.next();
+			maxSeqID = rs.getLong(1);
 		} catch (SQLException e) {
 			e.printStackTrace();
-		} 
-
-		timeWindow = Long.parseLong(System.getProperty("timeWindow"));
-		threadSize = Integer.parseInt(System.getProperty("numberOfThread"));
-
-		String latencyFileName = "latency_" + "_coordinator_sleep_time_" + System.getProperty("sleepDuration")
-				+ "_Thread_" + System.getProperty("numberOfThread") + "_" + dateFormat.format(new Date());
-
-		try {
-			latencyWriter = new BufferedWriter(
-					new OutputStreamWriter(new FileOutputStream(latencyFileName, true), "UTF-8"));
-		} catch (UnsupportedEncodingException | FileNotFoundException e) {
-			e.printStackTrace();
+		} finally {
+			try {
+				rs.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
 		}
+
 
 		// uptodate time
 		Date date = null;
@@ -109,104 +81,15 @@ public class CoordinatorRunnable implements Runnable, Config {
 				e.printStackTrace();
 			}
 
-			synchronized (totalRequest) {
-				totalRequest++;
-			}
-			threads.clear();
-
-			// start latency clock
-			synchronized (requestStartTime) {
-				requestStartTime = System.currentTimeMillis();
-				requestStartTimeStamp = new Timestamp(requestStartTime);
-
-			}
-
-			synchronized (requestExpirationTime) {
-				requestExpirationTime = requestStartTime + timeWindow;
-			}
-
-			//completedThread - how many threads has completed assigned task
-			// In the beginning of the every request it will be set as 0
-			synchronized (completedThread) {
-				completedThread = 0;
-			}
-			// set execution on progress
-			// requestInProgress = 1 or 0
-			// 1 means current request is still in progress. Checker will set it to 0
-			// after recording staleness and expiration ratio
-			synchronized (CoordinatorRunnable.requestInProgress) {
-				CoordinatorRunnable.requestInProgress = 1;
-			}
-			System.out.println("execution: " + CoordinatorRunnable.requestInProgress);
-
-			
-
 			try {
-				System.out.println("Coordinator RequestTimeStamp " + requestStartTimeStamp);
-				stmt.setTimestamp(1, requestStartTimeStamp);
 				rs = stmt.executeQuery();
 				rs.next();
 				long tmpMaxSeqID = rs.getLong(1);
-				
-				System.out.println("Coordinator maxId " + tmpMaxSeqID);
 				if (tmpMaxSeqID > maxSeqID) {
-					
-					
-					
-					long stepSize = (tmpMaxSeqID - maxSeqID) / threadSize;
-					long tmpNextMaxSeqID = 0L;
-					for (int i = 1; i <= threadSize; i++) {
-						if (i == threadSize) {
-							tmpNextMaxSeqID = tmpMaxSeqID;
-							queue.put(new Task(maxSeqID, tmpNextMaxSeqID));
-						} else {
-							tmpNextMaxSeqID = maxSeqID + stepSize;
-							queue.put(new Task(maxSeqID, tmpNextMaxSeqID));
-							maxSeqID = tmpNextMaxSeqID;
-						}
-
-						// initiate worker thread
-						threads.add(new Thread(new WorkerRunnable(i, queue)));
-
-					}
-
-					// Start WorkerThread
-					for (int i = 0; i < threads.size(); i++) {
-						threads.get(i).start();
-					}
-
-					// wait for threads to finish its task
-					for (int i = 0; i < threads.size(); i++) {
-						threads.get(i).join();
-					}
-					System.out.println("execution: " + CoordinatorRunnable.requestInProgress);
-					System.out.println("request Start Time " + requestStartTime);
-					System.out.println("expiration Time: " + requestExpirationTime);
+					queue.put(new Task(maxSeqID, tmpMaxSeqID));
 					maxSeqID = tmpMaxSeqID;
-
-					// end latency clock
-					long requestEndTime = System.currentTimeMillis();
-
-					// calculate avglatency
-					long latency = requestEndTime - requestStartTime;
-					totalLatency += latency;
-
-					avgLatency = totalLatency / totalRequest;
-
-					// write latency to a file
-					writeLatency(totalRequest, avgLatency, latency);
-					// wait for checker to finish its task
-					while (requestInProgress == 1) {
-						// when checker is done, it will set requestInProgress
-						// to false
-						System.out.println("Checker is still in progress");
-
-					}
-					// then cycle it again
-
-				} else {
-					System.out.println("Coordinator --------- No change");
 				}
+				System.out.println("Coordinator maxseqId: " + maxSeqID);
 			} catch (SQLException e) {
 				e.printStackTrace();
 			} catch (InterruptedException e) {
@@ -223,14 +106,4 @@ public class CoordinatorRunnable implements Runnable, Config {
 
 		}
 	}
-
-	public void writeLatency(long totalRequest, long avgLatency, long currentLatency) {
-		try {
-			latencyWriter.append(totalRequest + "," + avgLatency + "," + currentLatency +"\n");
-			latencyWriter.flush();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
 }

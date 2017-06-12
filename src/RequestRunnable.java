@@ -14,12 +14,16 @@ public class RequestRunnable implements Runnable{
 		// TODO This will continuously fire request with current time stamp and window time
 		while(true) {
 			try {
-				long requestInterval = Long.parseLong(System.getProperty("requestInterval"));
 				Thread.sleep(requestInterval);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			
+			long requestStartTime = System.currentTimeMillis();
+			long requestExpirationTime = requestStartTime + timeWindow;
 
+			CheckerRunnable checkerRunnable = new CheckerRunnable(requestStartTime, requestExpirationTime);
+			new Thread(checkerRunnable).start();					
 			
 			
 			
