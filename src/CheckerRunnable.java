@@ -41,6 +41,7 @@ public class CheckerRunnable implements Runnable {
 					System.out.println("Checker requestEndTime: "+ requestExpirationTime);
 					System.out.println("Checker latency: "+ latency);
 					System.out.println("Checker staleness: "+ staleness);
+					System.out.println("Checker expiration: "+ expired);
 					System.out.println("Checker uptodatetime: "+ uptodatetime);
 					System.out.println("--------------------------------");
 					break;

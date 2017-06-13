@@ -46,6 +46,10 @@ public class CoordinatorRunnable implements Runnable, Config {
 			rs = stmt.executeQuery();
 			rs.next();
 			maxSeqID = rs.getLong(1);
+			
+			
+			uptodate = new Timestamp(System.currentTimeMillis());
+
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} finally {
@@ -56,16 +60,6 @@ public class CoordinatorRunnable implements Runnable, Config {
 			}
 		}
 
-
-		// uptodate time
-		Date date = null;
-		try {
-			date = dateFormat.parse("2010-10-10-10-10-10");
-		} catch (ParseException e1) {
-			e1.printStackTrace();
-		}
-		long time = date.getTime();
-		uptodate = new Timestamp(time);
 	}
 
 	@Override

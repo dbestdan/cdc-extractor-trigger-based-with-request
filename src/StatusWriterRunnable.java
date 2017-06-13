@@ -10,13 +10,11 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
 public class StatusWriterRunnable implements Runnable, Config {
-	private long expirationTime = 0L;
 	private long totalLatency = 0L;
 	private long avglatency = 0L;
 	private long totalStaleness = 0L;
 	private long avgStaleness = 0L;
 	private long expirationRatio = 0L;
-	private long requestTime = 0L;
 	private long expirationCount = 0L;
 
 	private Writer stalenessWriter = null;
@@ -98,8 +96,7 @@ public class StatusWriterRunnable implements Runnable, Config {
 
 	public void write(Writer writer, long avg, long current) {
 		try {
-			writer.append(totalRequest + "," + avg + "," + current + "," + requestTime + ","
-					+ CoordinatorRunnable.uptodate.getTime() + "\n");
+			writer.append(totalRequest + "," + avg + "," + current + "\n");
 			writer.flush();
 		} catch (IOException e) {
 			e.printStackTrace();
