@@ -17,6 +17,8 @@ public class CheckerRunnable implements Runnable {
 		// TODO Auto-generated method stub
 		while (true) {
 			try {
+				Thread.sleep(5);
+				
 				synchronized (CoordinatorRunnable.uptodate) {
 					uptodatetime = CoordinatorRunnable.uptodate.getTime();
 				}
